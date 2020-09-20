@@ -20,7 +20,7 @@ func RndUUID() string {
 	return fmt.Sprintf("%s-%s-%s-%s-%s", s[:8], s[8:12], s[12:16], s[16:20], s[20:])
 }
 
-// RndUUIDMd5 make an uuid
+// RndUUIDMd5 make an md5 uuid
 func RndUUIDMd5() string {
 	ns := time.Now().UnixNano()
 	rndStr := strings.Join([]string{
