@@ -63,7 +63,7 @@ func New(opts ...Option) Logger {
 		log.Fatalln("init zap core error: ", err)
 	}
 
-	// 当logTraceFileLine = true并且 InitLogger的skip参数大于0,才会记录文件名和行号
+	// 当 addCaller = true 并且 callerSkip > 0 才会记录文件名和行号
 	if z.addCaller && z.callerSkip > 0 {
 		z.fLogger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(z.callerSkip))
 	} else {
@@ -86,7 +86,7 @@ func NewLogSugar(opts ...Option) *zap.SugaredLogger {
 		log.Fatalln("init zap core error: ", err)
 	}
 
-	// 当logTraceFileLine = true并且 InitLogger的skip参数大于0,才会记录文件名和行号
+	// 当 addCaller = true 并且 callerSkip > 0 才会记录文件名和行号
 	if z.addCaller && z.callerSkip > 0 {
 		z.fLogger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(z.callerSkip))
 	} else {
@@ -112,7 +112,7 @@ func defaultZapLogEntry() *zapLogWriter {
 	return z
 }
 
-// Debug debug级别日志
+// Debug debug log.
 func (z *zapLogWriter) Debug(ctx context.Context, msg string, fields ...interface{}) {
 	z.fLogger.Debug(msg, z.parseFields(ctx, fields)...)
 }
