@@ -1,5 +1,4 @@
 # golang logger
-
      Logger module based on uber zap package,
      which can be used to record operation logs in go applications
          1) Support automatic log cutting and maximum retention time
@@ -14,9 +13,7 @@
         4）支持日志打印级别和日志染色功能
 
 # how to use logger
-
     please see example
     
 # zap
-    
-    https://github.com/uber-go/zap
+https://github.com/uber-go/zap

@@ -4,9 +4,10 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+// Option option for zapLogWriter
 type Option func(z *zapLogWriter)
 
-// apply add option for zapLogWriter.
+// apply add option for zapLogWriter
 func (z *zapLogWriter) apply(opts ...Option) {
 	for _, o := range opts {
 		o(z)
@@ -41,7 +42,8 @@ func WithAddCaller(b bool) Option {
 	}
 }
 
-/** WithCallerSkip 设置callerSkip
+/*
+* WithCallerSkip 设置callerSkip
 addCaller = true,并且 callerSkip > 0 会设置zap.AddCallerSkip
 zap源码包中logger.go#260 check func
 check must always be called directly by a method in the Logger interface
@@ -62,6 +64,13 @@ func WithCallerSkip(skip int) Option {
 func WithLogLevel(level zapcore.Level) Option {
 	return func(z *zapLogWriter) {
 		z.logLevel = level
+	}
+}
+
+// WriteToFile 设置日志是否写入文件中
+func WriteToFile(b bool) Option {
+	return func(z *zapLogWriter) {
+		z.logWriteToFile = b
 	}
 }
 
@@ -90,13 +99,6 @@ func WithJsonFormat(b bool) Option {
 func WithStdout(b bool) Option {
 	return func(z *zapLogWriter) {
 		z.stdout = b
-	}
-}
-
-// WithEnableCatchStack 当出现panic的时候，在使用Panic记录日志是否捕获stack信息
-func WithEnableCatchStack(b bool) Option {
-	return func(z *zapLogWriter) {
-		z.enableCatchStack = b
 	}
 }
 

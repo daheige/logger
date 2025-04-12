@@ -26,7 +26,6 @@ func TestLogger(t *testing.T) {
 		WithMaxSize(20),
 		WithCompress(false),
 		WithHostname("myapp.com"),
-		WithEnableCatchStack(true), // 当使用Panic方法时候是否记录stack信息
 	)
 
 	// reqId := RndUUID()
@@ -51,7 +50,7 @@ func TestLogger(t *testing.T) {
 	logger.Info(ctx, "abc")
 
 	go func() {
-		defer logger.CatchPanic(ctx, "exec panic", "key", 123)
+		defer logger.Recover(ctx, "exec panic", "key", 123)
 
 		x := 1
 		log.Println("x = ", x)
@@ -79,14 +78,14 @@ func TestNewLogSugar(t *testing.T) {
 		WithMaxSize(20),
 		WithCompress(false),
 		WithHostname("myapp.com"),
-		WithEnableCatchStack(true), // 当使用Panic方法时候是否记录stack信息)
 	)
 
 	logSugar.Info("abc", 123, "info", "sugar hello")
 	logSugar.Error("a", 234, "x", "sugar hello world")
 }
 
-/**
+/*
+*
 BenchmarkNew 批量测试日志写入
 {"level":"info","time_local":"2020-09-20T17:21:35.883+0800",
 "caller_line":"/Users/heige/web/go/logger/logger_test.go:116",
@@ -114,7 +113,6 @@ func BenchmarkNew(b *testing.B) {
 		WithMaxSize(20),
 		WithCompress(false),
 		// WithHostname("myapp.com"),
-		WithEnableCatchStack(true), // 当使用Panic方法时候是否记录stack信息
 	)
 
 	// reqId := RndUUID()

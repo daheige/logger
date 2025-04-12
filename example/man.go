@@ -28,7 +28,6 @@ func main() {
 		logger.WithMaxSize(20),              // 每个日志文件最大20MB
 		logger.WithCompress(false),          // 日志不压缩
 		logger.WithHostname("myapp.com"),    // 设置hostname
-		logger.WithEnableCatchStack(true),   // 当使用Panic方法时候是否记录stack信息
 	)
 
 	// 模拟请求id
@@ -52,7 +51,7 @@ func main() {
 
 	// 在协程中抛出了panic，然后用CatchPanic进行捕获panic信息
 	go func() {
-		defer LogEntry.CatchPanic(ctx, "exec panic")
+		defer LogEntry.Recover(ctx, "exec panic")
 
 		log.Println("hello world")
 

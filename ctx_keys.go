@@ -23,6 +23,9 @@ var (
 	// RequestURI request uri
 	RequestURI = CtxKey{"request_uri"}
 
+	// UserAgent request ua
+	UserAgent = CtxKey{"request_ua"}
+
 	// LocalTime local_time
 	LocalTime = CtxKey{"local_time"}
 

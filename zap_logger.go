@@ -32,14 +32,12 @@ type zapLogWriter struct {
 	// addCaller = true,并且 callerSkip > 0 会设置zap.AddCallerSkip
 	callerSkip int
 
-	logLevel    zapcore.Level // zap日志级别
-	logFilename string        // 日志文件名，不包含路径，比如go-zap.log
-	logDir      string        // 日志存放的目录
-	jsonFormat  bool          // 是否json格式化
-	stdout      bool          // 是否输出到终端
-
-	// 当出现panic的时候，在使用Panic记录日志是否捕获stack信息
-	enableCatchStack bool
+	logLevel       zapcore.Level // zap日志级别
+	logWriteToFile bool          // 日志是否写入文件中
+	logFilename    string        // 日志文件名，不包含路径，比如go-zap.log
+	logDir         string        // 日志存放的目录
+	jsonFormat     bool          // 是否json格式化
+	stdout         bool          // 是否输出到终端
 
 	// 日志是否染色
 	// For example, InfoLevel is serialized to "info" and colored blue.
@@ -103,8 +101,9 @@ func defaultZapLogEntry() *zapLogWriter {
 		maxSize:     512,
 		compress:    false,
 		logLevel:    zapcore.InfoLevel,
-		logFilename: "zap.log",
+		logFilename: filepath.Base(os.Args[0]), // 默认程序运行时名称
 		logDir:      os.TempDir(),
+		stdout:      true, // 默认日志输出到stdout终端
 		jsonFormat:  true,
 		hostname:    defaultHostName,
 	}
@@ -137,18 +136,15 @@ func (z *zapLogWriter) DPanic(ctx context.Context, msg string, fields ...interfa
 	z.fLogger.DPanic(msg, z.parseFields(ctx, fields)...)
 }
 
-// CatchPanic 用来捕获程序运行出现的panic信息，并记录到日志中
+// Recover 用来捕获程序运行出现的panic信息，并记录到日志中
 // 这个panic信息，将采用 zap.DPanic 方法进行记录,程序继续运行，不退出
-func (z *zapLogWriter) CatchPanic(ctx context.Context, msg string, fields ...interface{}) {
+func (z *zapLogWriter) Recover(ctx context.Context, msg string, fields ...interface{}) {
 	if err := recover(); err != nil {
-		if z.enableCatchStack {
-			if len(fields) == 0 {
-				fields = make([]interface{}, 0, 2)
-			}
-
-			fields = append(fields, Fullstack.String(), string(debug.Stack()))
+		if len(fields) == 0 {
+			fields = make([]interface{}, 0, 2)
 		}
 
+		fields = append(fields, Fullstack.String(), string(debug.Stack()))
 		z.DPanic(ctx, msg, fields...)
 	}
 }
@@ -210,11 +206,11 @@ func (z *zapLogWriter) parseFields(ctx context.Context, args []interface{}) []za
 	}
 
 	fields = append(fields, zap.String(CurHostname.String(), z.hostname))
-	// request_id 可能是一个数字，但建议请求ip使用uuid字符串
+	// request_id 可能是一个数字，但建议请求id使用uuid字符串
 	if reqID := ctx.Value(XRequestID); reqID != nil {
 		fields = append(fields, zap.Any(XRequestID.String(), reqID))
 	} else {
-		fields = append(fields, zap.String(XRequestID.String(), RndUUIDMd5()))
+		fields = append(fields, zap.String(XRequestID.String(), Uuid()))
 	}
 
 	// request ip 地址存在就记录
@@ -238,7 +234,7 @@ func (z *zapLogWriter) parseFields(ctx context.Context, args []interface{}) []za
 	return fields
 }
 
-// initCore 初始化zap core.
+// initCore 初始化zap core
 func (z *zapLogWriter) initCore() (zapcore.Core, error) {
 	// encoder config
 	encoderConf := zapcore.EncoderConfig{
@@ -260,37 +256,42 @@ func (z *zapLogWriter) initCore() (zapcore.Core, error) {
 		encoderConf.EncodeLevel = zapcore.LowercaseLevelEncoder // 小写编码器
 	}
 
-	if z.logDir == "" {
-		z.logFilename = filepath.Join(os.TempDir(), z.logFilename) // 默认日志文件名称
-	} else {
-		if !z.checkPathExist(z.logDir) {
-			if err := os.MkdirAll(z.logDir, 0755); err != nil {
-				return nil, err
-			}
+	opts := make([]zapcore.WriteSyncer, 0, 2)
+	if z.logWriteToFile {
+		if z.logFilename == "" {
+			z.logFilename = filepath.Base(os.Args[0])
 		}
 
-		z.logFilename = filepath.Join(z.logDir, z.logFilename)
+		if z.logDir == "" {
+			z.logFilename = filepath.Join(os.TempDir(), z.logFilename) // 默认日志文件名称
+		} else {
+			if !z.checkPathExist(z.logDir) {
+				if err := os.MkdirAll(z.logDir, 0755); err != nil {
+					return nil, err
+				}
+			}
+
+			z.logFilename = filepath.Join(z.logDir, z.logFilename)
+		}
+
+		// 日志最低级别设置
+		syncWriter := zapcore.AddSync(&lumberjack.Logger{
+			Filename:  z.logFilename, // ⽇志⽂件路径
+			MaxSize:   z.maxSize,     // 单位为MB,默认为512MB
+			MaxAge:    z.maxAge,      // 文件最多保存多少天
+			LocalTime: true,          // 采用本地时间
+			Compress:  z.compress,    // 是否压缩日志
+		})
+
+		opts = append(opts, syncWriter)
 	}
 
-	// 日志最低级别设置
-	syncWriter := zapcore.AddSync(&lumberjack.Logger{
-		Filename:  z.logFilename, // ⽇志⽂件路径
-		MaxSize:   z.maxSize,     // 单位为MB,默认为512MB
-		MaxAge:    z.maxAge,      // 文件最多保存多少天
-		LocalTime: true,          // 采用本地时间
-		Compress:  z.compress,    // 是否压缩日志
-	})
-
-	var wsOpts = []zapcore.WriteSyncer{
-		syncWriter,
-	}
-
-	if z.stdout {
-		wsOpts = append(wsOpts, zapcore.AddSync(os.Stdout))
+	if z.stdout { // 日志输出到终端中
+		opts = append(opts, zapcore.AddSync(os.Stdout))
 	}
 
 	// 创建一个混合WriteSyncer
-	writerSyncer := zapcore.NewMultiWriteSyncer(wsOpts...)
+	writerSyncer := zapcore.NewMultiWriteSyncer(opts...)
 
 	// json格式化日志
 	if z.jsonFormat {

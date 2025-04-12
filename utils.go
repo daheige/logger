@@ -8,7 +8,24 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
+
+// Uuid 生成 version4 的uuid
+// 返回格式:eba1e8cd0460491049c644bdf3cf024d
+func Uuid() string {
+	u, err := uuid.NewRandom()
+	if err != nil {
+		return strings.Replace(RndUUID(), "-", "", -1)
+	}
+
+	return strings.Replace(u.String(), "-", "", -1)
+}
 
 // RndUUID realizes unique uuid based on time ns and random number
 // There is no duplication of uuid on a single machine
@@ -36,7 +53,6 @@ func RandInt64(min, max int64) int64 {
 		return max
 	}
 
-	rand.Seed(time.Now().UnixNano())
 	return rand.Int63n(max-min) + min
 }
 
