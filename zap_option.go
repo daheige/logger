@@ -1,6 +1,8 @@
 package logger
 
 import (
+	"time"
+
 	"go.uber.org/zap/zapcore"
 )
 
@@ -118,5 +120,26 @@ func WithHostname(hostname string) Option {
 func WithCores(cores ...zapcore.Core) Option {
 	return func(z *zapLogWriter) {
 		z.cores = append(z.cores, cores...)
+	}
+}
+
+// WithEnableSentry 是否开启sentry上报
+func WithEnableSentry(b bool) Option {
+	return func(z *zapLogWriter) {
+		z.enableSentry = b
+	}
+}
+
+// WithSentryFlushTimeout 设置 sentry flush timeout
+func WithSentryFlushTimeout(d time.Duration) Option {
+	return func(z *zapLogWriter) {
+		z.sentryFlushTimeout = d
+	}
+}
+
+// WithSentryLevels 设置 sentry 上报的 zap levels
+func WithSentryLevels(level ...zapcore.Level) Option {
+	return func(z *zapLogWriter) {
+		z.sentryLevels = append(z.sentryLevels, level...)
 	}
 }

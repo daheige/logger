@@ -21,9 +21,7 @@ func Default(opts ...Option) {
 	options := []Option{
 		WithJsonFormat(true),        // 默认json格式化输出
 		WithCallerSkip(2),           // 如果基于这个Logger包，需要设置适当的skip
-		WithEnableColor(false),      // 日志是否染色，默认不染色
 		WithLogLevel(zap.InfoLevel), // 设置日志打印最低级别,如果不设置,默认为info级别
-		WithCompress(false),         // 日志不压缩
 		WithStdout(true),            // 日志默认输出到终端
 
 		// WithLogDir(defaultLogDir),       // 日志目录

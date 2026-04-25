@@ -11,6 +11,7 @@ import (
 	"runtime/debug"
 	"time"
 
+	sentryzap "github.com/getsentry/sentry-go/zap"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -51,6 +52,14 @@ type zapLogWriter struct {
 
 	// zap cores 允许外部zap core注入，例如：sentry,openobserve core实现
 	cores []zapcore.Core
+
+	// sentry上报接入
+	enableSentry bool
+	// sentry 异步上报间隔，默认5s
+	sentryFlushTimeout time.Duration
+	// 默认只允许错误级别以上的日志上报
+	// 如果需要改变sentry上报的日志级别，调用 WithSentryLevels 函数设置上报的sentry日志级别
+	sentryLevels []zapcore.Level
 }
 
 // New 创建一个Logger interface.
@@ -70,16 +79,17 @@ func NewLogSugar(opts ...Option) *zap.SugaredLogger {
 // init zapLogWriter
 func initWriter(opts []Option) *zapLogWriter {
 	z := &zapLogWriter{
-		maxAge:      7,
-		maxSize:     512,
-		compress:    false,
-		logLevel:    zapcore.InfoLevel,
-		logFilename: filepath.Base(os.Args[0]), // 默认程序运行时名称
-		logDir:      defaultLogDir,
-		stdout:      true, // 默认日志输出到stdout终端
-		jsonFormat:  true,
-		hostname:    defaultHostName,
-		cores:       make([]zapcore.Core, 0, 4),
+		maxAge:         7,
+		maxSize:        512,
+		compress:       false,
+		logLevel:       zapcore.InfoLevel,         // 默认info级别
+		logWriteToFile: false,                     // 默认不写文件
+		logFilename:    filepath.Base(os.Args[0]), // 默认程序运行时名称
+		logDir:         defaultLogDir,
+		stdout:         true, // 默认日志输出到stdout终端
+		jsonFormat:     true, // 默认使用json format
+		hostname:       defaultHostName,
+		cores:          make([]zapcore.Core, 0, 4),
 	}
 
 	z.apply(opts)
@@ -307,9 +317,41 @@ func (z *zapLogWriter) initCores() error {
 	writerSyncer := zapcore.NewMultiWriteSyncer(opts...)
 	core := zapcore.NewCore(enc, writerSyncer, z.logLevel)
 
+	if z.enableSentry {
+		z.cores = append(z.cores, z.initSentryCore())
+	}
+
 	z.cores = append(z.cores, core)
 
 	return nil
+}
+
+func (z *zapLogWriter) initSentryCore() *sentryzap.SentryCore {
+	if len(z.sentryLevels) == 0 {
+		// 设置日志级别：默认只有 Error 及以上级别才会作为事件发送给 Sentry
+		// Info 及以下级别通常作为面包屑（Breadcrumbs）记录，用于上下文追踪
+		z.sentryLevels = []zapcore.Level{
+			zapcore.WarnLevel,
+			zapcore.ErrorLevel,
+			zapcore.DPanicLevel,
+			zapcore.PanicLevel,
+			zapcore.FatalLevel,
+		}
+	}
+
+	if z.sentryFlushTimeout == 0 {
+		z.sentryFlushTimeout = 5 * time.Second
+	}
+
+	// 创建 Sentry Core
+	opt := sentryzap.Option{
+		Level:        z.sentryLevels,
+		AddCaller:    z.addCaller,
+		FlushTimeout: z.sentryFlushTimeout,
+	}
+
+	sentryCore := sentryzap.NewSentryCore(context.Background(), opt)
+	return sentryCore
 }
 
 // checkPathExist check file or path exist
