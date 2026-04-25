@@ -1,4 +1,4 @@
-// logger 基于zap日志库，进行封装的logger库
+// Package logger 基于zap日志库，进行封装的logger库
 // 支持日志自动切割
 package logger
 
@@ -48,26 +48,14 @@ type zapLogWriter struct {
 
 	// zap底层Logger接口
 	fLogger *zap.Logger
+
+	// zap cores 允许外部zap core注入，例如：sentry,openobserve core实现
+	cores []zapcore.Core
 }
 
 // New 创建一个Logger interface.
 func New(opts ...Option) Logger {
-	z := defaultZapLogEntry()
-
-	z.apply(opts...)
-
-	core, err := z.initCore()
-	if err != nil {
-		log.Fatalln("init zap core error: ", err)
-	}
-
-	// 当 addCaller = true 并且 callerSkip > 0 才会记录文件名和行号
-	if z.addCaller && z.callerSkip > 0 {
-		z.fLogger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(z.callerSkip))
-	} else {
-		z.fLogger = zap.New(core)
-	}
-
+	z := initWriter(opts)
 	return z
 }
 
@@ -75,37 +63,38 @@ func New(opts ...Option) Logger {
 // 支持Debug,Info,Error,Panic,Warn,Fatal等方法
 // 返回一个*zap.SugaredLogger
 func NewLogSugar(opts ...Option) *zap.SugaredLogger {
-	z := defaultZapLogEntry()
-
-	z.apply(opts...)
-
-	core, err := z.initCore()
-	if err != nil {
-		log.Fatalln("init zap core error: ", err)
-	}
-
-	// 当 addCaller = true 并且 callerSkip > 0 才会记录文件名和行号
-	if z.addCaller && z.callerSkip > 0 {
-		z.fLogger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(z.callerSkip))
-	} else {
-		z.fLogger = zap.New(core)
-	}
-
+	z := initWriter(opts)
 	return z.fLogger.Sugar()
 }
 
-// defaultZapLogEntry create default zapLogWriter
-func defaultZapLogEntry() *zapLogWriter {
+// init zapLogWriter
+func initWriter(opts []Option) *zapLogWriter {
 	z := &zapLogWriter{
 		maxAge:      7,
 		maxSize:     512,
 		compress:    false,
 		logLevel:    zapcore.InfoLevel,
 		logFilename: filepath.Base(os.Args[0]), // 默认程序运行时名称
-		logDir:      os.TempDir(),
+		logDir:      defaultLogDir,
 		stdout:      true, // 默认日志输出到stdout终端
 		jsonFormat:  true,
 		hostname:    defaultHostName,
+		cores:       make([]zapcore.Core, 0, 4),
+	}
+
+	z.apply(opts)
+
+	err := z.initCores()
+	if err != nil {
+		log.Fatalln("init zap core error: ", err)
+	}
+
+	core := zapcore.NewTee(z.cores...)
+	// 当 addCaller = true 并且 callerSkip > 0 才会记录文件名和行号
+	if z.addCaller && z.callerSkip > 0 {
+		z.fLogger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(z.callerSkip))
+	} else {
+		z.fLogger = zap.New(core)
 	}
 
 	return z
@@ -200,12 +189,29 @@ func (z *zapLogWriter) parseFields(ctx context.Context, args []interface{}) []za
 		i += 2
 	}
 
-	if curTime := ctx.Value(LocalTime); curTime == nil {
-		// add time_local 请求本地时间字段
+	fields = append(fields, z.parseCtxFields(ctx)...)
+	return fields
+}
+
+// 解析ctx上面内置的 zap fields
+func (z *zapLogWriter) parseCtxFields(ctx context.Context) []zap.Field {
+	fields := make([]zap.Field, 0, 10)
+	// add time_local 请求本地时间字段
+	if curTime := ctx.Value(LocalTime); curTime != nil {
+		timeLocal, _ := curTime.(string)
+		fields = append(fields, zap.String(LocalTime.String(), timeLocal))
+	} else {
 		fields = append(fields, zap.String(LocalTime.String(), time.Now().Format(tmFmtWithMS)))
 	}
 
-	fields = append(fields, zap.String(CurHostname.String(), z.hostname))
+	// 当前hostname
+	if host := ctx.Value(CurHostname); host != nil {
+		hostname, _ := host.(string)
+		fields = append(fields, zap.String(CurHostname.String(), hostname))
+	} else {
+		fields = append(fields, zap.String(CurHostname.String(), z.hostname))
+	}
+
 	// request_id 可能是一个数字，但建议请求id使用uuid字符串
 	if reqID := ctx.Value(XRequestID); reqID != nil {
 		fields = append(fields, zap.Any(XRequestID.String(), reqID))
@@ -234,8 +240,8 @@ func (z *zapLogWriter) parseFields(ctx context.Context, args []interface{}) []za
 	return fields
 }
 
-// initCore 初始化zap core
-func (z *zapLogWriter) initCore() (zapcore.Core, error) {
+// initCores 初始化zap core
+func (z *zapLogWriter) initCores() error {
 	// encoder config
 	encoderConf := zapcore.EncoderConfig{
 		TimeKey:        "time_local", // 本地时间字段
@@ -263,11 +269,11 @@ func (z *zapLogWriter) initCore() (zapcore.Core, error) {
 		}
 
 		if z.logDir == "" {
-			z.logFilename = filepath.Join(os.TempDir(), z.logFilename) // 默认日志文件名称
+			z.logFilename = filepath.Join(defaultLogDir, z.logFilename) // 默认日志文件名称
 		} else {
 			if !z.checkPathExist(z.logDir) {
 				if err := os.MkdirAll(z.logDir, 0755); err != nil {
-					return nil, err
+					return err
 				}
 			}
 
@@ -290,15 +296,20 @@ func (z *zapLogWriter) initCore() (zapcore.Core, error) {
 		opts = append(opts, zapcore.AddSync(os.Stdout))
 	}
 
-	// 创建一个混合WriteSyncer
-	writerSyncer := zapcore.NewMultiWriteSyncer(opts...)
-
-	// json格式化日志
-	if z.jsonFormat {
-		return zapcore.NewCore(zapcore.NewJSONEncoder(encoderConf), writerSyncer, z.logLevel), nil
+	var enc zapcore.Encoder
+	if z.jsonFormat { // json格式化日志
+		enc = zapcore.NewJSONEncoder(encoderConf)
+	} else {
+		enc = zapcore.NewConsoleEncoder(encoderConf)
 	}
 
-	return zapcore.NewCore(zapcore.NewConsoleEncoder(encoderConf), writerSyncer, z.logLevel), nil
+	// 创建一个混合WriteSyncer
+	writerSyncer := zapcore.NewMultiWriteSyncer(opts...)
+	core := zapcore.NewCore(enc, writerSyncer, z.logLevel)
+
+	z.cores = append(z.cores, core)
+
+	return nil
 }
 
 // checkPathExist check file or path exist

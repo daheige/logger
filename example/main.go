@@ -16,9 +16,11 @@ var LogEntry logger.Logger
 func main() {
 	// 对于log option 下面的可以根据实际情况使用
 	LogEntry = logger.New(
-		logger.WithLogDir("./logs"),         // 日志目录
-		logger.WithLogFilename("zap.log"),   // 日志文件名，默认zap.log
-		logger.WithStdout(true),             // 一般生产环境，建议不输出到stdout
+		logger.WithLogDir("./logs"),       // 日志目录
+		logger.WithLogFilename("zap.log"), // 日志文件名，默认zap.log
+		logger.WithWriteToFile(true),      // 开启日志写入文件
+
+		logger.WithStdout(true),             // 一般生产环境，建议输出到stdout
 		logger.WithJsonFormat(true),         // json格式化
 		logger.WithAddCaller(true),          // 打印行号
 		logger.WithCallerSkip(1),            // 如果基于这个Logger包，再包装一次，这个skip = 2,以此类推

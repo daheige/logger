@@ -16,15 +16,17 @@ func TestLogger(t *testing.T) {
 	var logger = New(
 		WithLogDir("./logs"),
 		WithLogFilename("zap.log"),
-		WithStdout(true), // 一般生产环境，建议不输出到stdout
+		WithWriteToFile(true), // 开启日志写入文件
+		WithMaxAge(3),
+		WithMaxSize(20),
+		WithCompress(false),
+
+		WithStdout(true), // 一般生产环境，建议输出到stdout
 		WithJsonFormat(true),
 		WithAddCaller(true),
 		WithCallerSkip(1), // 如果基于这个Logger包，再包装一次，这个skip = 2,以此类推
 		WithEnableColor(false),
 		WithLogLevel(zap.DebugLevel), // 设置日志打印最低级别,如果不设置默认为info级别
-		WithMaxAge(3),
-		WithMaxSize(20),
-		WithCompress(false),
 		WithHostname("myapp.com"),
 	)
 
@@ -66,17 +68,20 @@ func TestLogger(t *testing.T) {
 // TestNewLogSugar test log sugar.
 func TestNewLogSugar(t *testing.T) {
 	// 测试log sugar方法
-	logSugar := NewLogSugar(WithLogDir("./logs"),
+	logSugar := NewLogSugar(
+		WithLogDir("./logs"),
 		WithLogFilename("zap-sugar.log"),
-		WithStdout(true), // 一般生产环境，建议不输出到stdout
+		WithWriteToFile(true),
+		WithMaxAge(3),
+		WithMaxSize(20),
+		WithCompress(false),
+
+		WithStdout(true), // 一般生产环境，建议输出到stdout
 		WithJsonFormat(true),
 		WithAddCaller(true),
 		WithCallerSkip(1), // 如果基于这个Logger包，再包装一次，这个skip = 2,以此类推
 		WithEnableColor(false),
 		WithLogLevel(zap.DebugLevel), // 设置日志打印最低级别,如果不设置默认为info级别
-		WithMaxAge(3),
-		WithMaxSize(20),
-		WithCompress(false),
 		WithHostname("myapp.com"),
 	)
 
@@ -103,15 +108,17 @@ func BenchmarkNew(b *testing.B) {
 	var logger = New(
 		WithLogDir("./logs"),
 		WithLogFilename("zap-bench.log"),
-		WithStdout(true), // 一般生产环境，建议不输出到stdout
+		WithWriteToFile(true),
+		WithMaxAge(3),
+		WithMaxSize(20),
+		WithCompress(false),
+
+		WithStdout(true), // 一般生产环境，建议输出到stdout
 		WithJsonFormat(true),
 		WithAddCaller(true),
 		WithCallerSkip(1), // 如果基于这个Logger包，再包装一次，这个skip = 2,以此类推
 		WithEnableColor(false),
 		WithLogLevel(zap.DebugLevel), // 设置日志打印最低级别,如果不设置默认为info级别
-		WithMaxAge(3),
-		WithMaxSize(20),
-		WithCompress(false),
 		// WithHostname("myapp.com"),
 	)
 
