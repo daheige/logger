@@ -26,8 +26,8 @@ var (
 	// UserAgent request ua
 	UserAgent = CtxKey{"request_ua"}
 
-	// LocalTime local_time
-	LocalTime = CtxKey{"local_time"}
+	// TimeLocal time local
+	TimeLocal = CtxKey{"time_local"}
 
 	// CurHostname current hostname
 	CurHostname = CtxKey{"hostname"}

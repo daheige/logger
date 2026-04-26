@@ -11,7 +11,7 @@ import (
 	"runtime/debug"
 	"time"
 
-	sentryzap "github.com/getsentry/sentry-go/zap"
+	"github.com/getsentry/sentry-go"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -55,11 +55,13 @@ type zapLogWriter struct {
 
 	// sentry上报接入
 	enableSentry bool
-	// sentry 异步上报间隔，默认5s
+	// sentry 异步上报超时时间，默认3s
 	sentryFlushTimeout time.Duration
+
+	// 需要上报的日志级别
 	// 默认只允许错误级别以上的日志上报
-	// 如果需要改变sentry上报的日志级别，调用 WithSentryLevels 函数设置上报的sentry日志级别
-	sentryLevels []zapcore.Level
+	// 如果需要改变sentry上报的日志级别，调用 WithSentryLevel 函数设置上报的sentry日志级别
+	sentryLevel zapcore.Level
 }
 
 // New 创建一个Logger interface.
@@ -90,6 +92,7 @@ func initWriter(opts []Option) *zapLogWriter {
 		jsonFormat:     true, // 默认使用json format
 		hostname:       defaultHostName,
 		cores:          make([]zapcore.Core, 0, 4),
+		sentryLevel:    zapcore.ErrorLevel, // sentry 默认错误级别的日志上报
 	}
 
 	z.apply(opts)
@@ -207,11 +210,11 @@ func (z *zapLogWriter) parseFields(ctx context.Context, args []interface{}) []za
 func (z *zapLogWriter) parseCtxFields(ctx context.Context) []zap.Field {
 	fields := make([]zap.Field, 0, 10)
 	// add time_local 请求本地时间字段
-	if curTime := ctx.Value(LocalTime); curTime != nil {
+	if curTime := ctx.Value(TimeLocal); curTime != nil {
 		timeLocal, _ := curTime.(string)
-		fields = append(fields, zap.String(LocalTime.String(), timeLocal))
+		fields = append(fields, zap.String(TimeLocal.String(), timeLocal))
 	} else {
-		fields = append(fields, zap.String(LocalTime.String(), time.Now().Format(tmFmtWithMS)))
+		fields = append(fields, zap.String(TimeLocal.String(), time.Now().Format(tmFmtWithMS)))
 	}
 
 	// 当前hostname
@@ -317,41 +320,17 @@ func (z *zapLogWriter) initCores() error {
 	writerSyncer := zapcore.NewMultiWriteSyncer(opts...)
 	core := zapcore.NewCore(enc, writerSyncer, z.logLevel)
 
-	if z.enableSentry {
-		z.cores = append(z.cores, z.initSentryCore())
-	}
-
 	z.cores = append(z.cores, core)
 
-	return nil
-}
-
-func (z *zapLogWriter) initSentryCore() *sentryzap.SentryCore {
-	if len(z.sentryLevels) == 0 {
-		// 设置日志级别：默认只有 Error 及以上级别才会作为事件发送给 Sentry
-		// Info 及以下级别通常作为面包屑（Breadcrumbs）记录，用于上下文追踪
-		z.sentryLevels = []zapcore.Level{
-			zapcore.WarnLevel,
-			zapcore.ErrorLevel,
-			zapcore.DPanicLevel,
-			zapcore.PanicLevel,
-			zapcore.FatalLevel,
+	if z.enableSentry {
+		if sentry.CurrentHub().Client() == nil {
+			log.Fatalln("sentry not configured")
 		}
+
+		z.cores = append(z.cores, newSentryCore(z.sentryLevel, sentry.CurrentHub(), z.sentryFlushTimeout))
 	}
 
-	if z.sentryFlushTimeout == 0 {
-		z.sentryFlushTimeout = 5 * time.Second
-	}
-
-	// 创建 Sentry Core
-	opt := sentryzap.Option{
-		Level:        z.sentryLevels,
-		AddCaller:    z.addCaller,
-		FlushTimeout: z.sentryFlushTimeout,
-	}
-
-	sentryCore := sentryzap.NewSentryCore(context.Background(), opt)
-	return sentryCore
+	return nil
 }
 
 // checkPathExist check file or path exist

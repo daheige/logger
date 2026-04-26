@@ -137,9 +137,9 @@ func WithSentryFlushTimeout(d time.Duration) Option {
 	}
 }
 
-// WithSentryLevels 设置 sentry 上报的 zap levels
-func WithSentryLevels(level ...zapcore.Level) Option {
+// WithSentryLevel 设置 sentry 上报的 zap level
+func WithSentryLevel(level zapcore.Level) Option {
 	return func(z *zapLogWriter) {
-		z.sentryLevels = append(z.sentryLevels, level...)
+		z.sentryLevel = level
 	}
 }
