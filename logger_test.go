@@ -2,6 +2,7 @@ package logger
 
 import (
 	"context"
+	"errors"
 	"log"
 	"runtime/debug"
 	"testing"
@@ -42,7 +43,7 @@ func TestLogger(t *testing.T) {
 	logger.Error(ctx, "exec error", zap.Any("details", map[string]interface{}{
 		"name": "zap",
 		"age":  30,
-	}))
+	}), "err", errors.New("err1"), zap.Error(errors.New("err2")))
 
 	logger.Debug(ctx, "test abc", nil)
 

@@ -8,8 +8,9 @@ import (
 )
 
 type customSentryCore struct {
-	level  zapcore.Level
-	hub    *sentry.Hub
+	level zapcore.Level
+	hub   *sentry.Hub
+	
 	fields []zapcore.Field
 	// 异步上报日志间隔，建议设置3s
 	flushTimeout time.Duration
